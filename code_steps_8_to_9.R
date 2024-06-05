@@ -129,12 +129,14 @@ Results_input <- as.data.frame(topTags(QLtest_input, n = dim(DGE_input)[1]))
 
 # Volcano plot 
 Results_input$diffexpressed <- "NO"
-Results_input$diffexpressed[Results_input$logFC > 1 & Results_input$FDR < 0.05] <- "UP"
-Results_input$diffexpressed[Results_input$logFC < -1 & Results_input$FDR < 0.05] <- "DOWN"
-Results_input$Top <- rownames(Results_input)
-Results_input[5:nrow(Results_input),"Top"] <- NA
-Results_input["LmjF.34.0495","Top"] <- "LmjF.34.0495"
-Results_input["LmjF.34.3830","Top"] <- "LmjF.34.3830"
+Results_input$diffexpressed[Results_input$logFC > 0.5849625 & Results_input$FDR < 0.15] <- "UP"
+Results_input$diffexpressed[Results_input$logFC < -0.5849625 & Results_input$FDR < 0.15] <- "DOWN"
+Results_input <- Results_input %>% 
+  group_by(diffexpressed) %>%
+  arrange(ifelse(diffexpressed == "DOWN", logFC, -logFC))%>%
+  mutate(Top = ifelse(row_number() <= 10, Symbol,""))%>% # Change the top number and the name of the column with the names or symbols
+  mutate(Top = ifelse(diffexpressed == "NO", "", Top)) # With this code it will erase the top names or symbols created in NO category
+row.names(Results_input) <- Results_input$ID
 
 plot <- ggplot(data = Results_input, aes(x = logFC, y = -log10(PValue), col = diffexpressed, label =Top)) +
   geom_point() +
@@ -206,12 +208,14 @@ QLtest_Mono <- glmQLFTest(fit_Mono, contrast=Mono_cont)
 Results_Mono <- as.data.frame(topTags(QLtest_Mono, n = dim(DGE_Mono)[1]))
 
 Results_Mono$diffexpressed <- "NO"
-Results_Mono$diffexpressed[Results_Mono$logFC > 1 & Results_Mono$FDR < 0.05] <- "UP"
-Results_Mono$diffexpressed[Results_Mono$logFC < -1 & Results_Mono$FDR < 0.05] <- "DOWN"
-Results_Mono$Top <- rownames(Results_Mono)
-Results_Mono[5:nrow(Results_Mono),"Top"] <- NA
-Results_Mono["LmjF.36.4640.1","Top"] <- "LmjF.36.4640.1"
-Results_Mono["LmjF.15.0560","Top"] <- "LmjF.15.0560"
+Results_Mono$diffexpressed[Results_Mono$logFC > 0.5849625 & Results_Mono$FDR < 0.15] <- "UP"
+Results_Mono$diffexpressed[Results_Mono$logFC < -0.5849625 & Results_Mono$FDR < 0.15] <- "DOWN"
+Results_Mono <- Results_Mono %>% 
+  group_by(diffexpressed) %>%
+  arrange(ifelse(diffexpressed == "DOWN", logFC, -logFC))%>%
+  mutate(Top = ifelse(row_number() <= 10, Symbol,""))%>% 
+  mutate(Top = ifelse(diffexpressed == "NO", "", Top)) 
+row.names(Results_Mono) <- Results_Mono$ID
 
 plot <- ggplot(data = Results_Mono, aes(x = logFC, y = -log10(PValue), col = diffexpressed, label =Top)) +
   geom_point() +
@@ -285,12 +289,14 @@ Results_LP <- as.data.frame(topTags(QLtest_LP, n = dim(DGE_LP)[1]))
 # Volcano plot
 
 Results_LP$diffexpressed <- "NO"
-Results_LP$diffexpressed[Results_LP$logFC > 1 & Results_LP$FDR < 0.05] <- "UP"
-Results_LP$diffexpressed[Results_LP$logFC < -1 & Results_LP$FDR < 0.05] <- "DOWN"
-Results_LP$Top <- rownames(Results_LP)
-Results_LP[5:nrow(Results_LP),"Top"] <- NA
-Results_LP["LmjF.15.0560","Top"] <- "LmjF.15.0560"
-Results_LP["","Top"] <- ""
+Results_LP$diffexpressed[Results_LP$logFC > 0.5849625 & Results_LP$FDR < 0.15] <- "UP"
+Results_LP$diffexpressed[Results_LP$logFC < -0.5849625 & Results_LP$FDR < 0.15] <- "DOWN"
+Results_LP <- Results_LP %>% 
+  group_by(diffexpressed) %>%
+  arrange(ifelse(diffexpressed == "DOWN", logFC, -logFC))%>%
+  mutate(Top = ifelse(row_number() <= 10, Symbol,""))%>% 
+  mutate(Top = ifelse(diffexpressed == "NO", "", Top)) 
+row.names(Results_LP) <- Results_LP$ID
 
 plot <- ggplot(data = Results_LP, aes(x = logFC, y = -log10(PValue), col = diffexpressed, label =Top)) +
   geom_point() +
@@ -363,12 +369,14 @@ Results_HP <- as.data.frame(topTags(QLtest_HP, n = dim(DGE_HP)[1]))
 
 # Volcano plot
 Results_HP$diffexpressed <- "NO"
-Results_HP$diffexpressed[Results_HP$logFC > 1 & Results_HP$FDR < 0.05] <- "UP"
-Results_HP$diffexpressed[Results_HP$logFC < -1 & Results_HP$FDR < 0.05] <- "DOWN"
-Results_HP$Top <- rownames(Results_HP)
-Results_HP[5:nrow(Results_HP),"Top"] <- NA
-Results_HP["LmjF.29.1270","Top"] <- "LmjF.29.1270"
-Results_HP["LmjF.08.0860","Top"] <- "LmjF.08.0860"
+Results_HP$diffexpressed[Results_HP$logFC > 0.5849625 & Results_HP$FDR < 0.15] <- "UP"
+Results_HP$diffexpressed[Results_HP$logFC < -0.5849625 & Results_HP$FDR < 0.15] <- "DOWN"
+Results_HP <- Results_HP %>% 
+  group_by(diffexpressed) %>%
+  arrange(ifelse(diffexpressed == "DOWN", logFC, -logFC))%>%
+  mutate(Top = ifelse(row_number() <= 10, Symbol,""))%>% 
+  mutate(Top = ifelse(diffexpressed == "NO", "", Top)) 
+row.names(Results_HP) <- Results_HP$ID
 
 plot <- ggplot(data = Results_HP, aes(x = logFC, y = -log10(PValue), col = diffexpressed, label =Top)) +
   geom_point() +
