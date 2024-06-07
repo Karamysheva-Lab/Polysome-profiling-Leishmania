@@ -35,13 +35,14 @@ DGE <- DGEList(counts = raw_counts, remove.zeros = TRUE,
                group = sample_table$group)
 DGE$samples
 
-#################  PCA  and correlation with all samples ####################
+#################  PCA  and correlation for all samples ####################
 
-# get normalized counts
+# Get normalized counts
 CPM <- cpm(DGE,normalized.lib.sizes = TRUE, log = TRUE)
-#PCA
+
+# Get a PCA plot
 PCA <- prcomp(t(CPM))
-#plot
+
 png("PCA_plot_1.png", units = "in", width=7, height=6, res=500)
 autoplot(PCA,x=1, y=2, colour = "group", shape = "fraction",size=3,data = sample_table) + 
   geom_hline(yintercept=0, col="gray") + geom_vline(xintercept=0,col="gray") + theme_minimal() + 
@@ -49,21 +50,21 @@ autoplot(PCA,x=1, y=2, colour = "group", shape = "fraction",size=3,data = sample
   guides(colour=guide_legend(title="Group"),shape=guide_legend(title="Time"))
 dev.off()
 
-# correlation
+# Get a correlation plot
 Cor_matrix <- cor(CPM)
-#plot
+
 png("Cor_plot_1.png", units = "in", width=7, height=6, res=500)
 corrplot(Cor_matrix, method = 'color',is.corr = FALSE, col.lim = c(0.7, 1), col = COL1("Blues"))
 dev.off()
 
-#################  exploratory analysis with all samples ####################
+#################  Exploratory analysis for all samples ####################
 
-# barplot for all samples
+# Barplot for all samples
 png("barplot_raw.png", units = "in", width=8, height=6, res=500)
 barplot(colSums(raw_counts), las=1,cex.names=0.8)
 dev.off()
 
-# boxplot by fraction and group for all samples
+# Boxplot by fraction and group for all samples
 boxplot(colSums(raw_counts) ~ sample_table$fraction)
 boxplot(colSums(raw_counts) ~ sample_table$group)
 
@@ -72,7 +73,7 @@ sum(MinVals == 0)
 Exp <- raw_counts[MinVals > 0, ]
 Exp_log2 <- as.matrix(log2(Exp))
 
-# boxplot of raw counts by sample
+# Boxplot of raw counts by sample
 png("boxplot_raw.png", units = "in", width=8, height=6, res=500)
 boxplot(Exp_log2, ylab="log2 counts", main="Raw Counts", las=1, cex.axis=0.8)
 dev.off()
@@ -86,7 +87,7 @@ sum(MinVals == 0)
 Exp <- CPM_size[MinVals > 0, ]
 Exp_log2 <- as.matrix(Exp)
 
-# boxplot of raw counts by sample
+# Boxplot of normalized counts by sample
 png("boxplot_norm.png", units = "in", width=8, height=6, res=500)
 boxplot(Exp_log2, ylab="log2 counts", main="Normalized Counts", las=1, cex.axis=0.8)
 dev.off()
@@ -126,11 +127,14 @@ fit_input <- glmQLFit(DGE_input, design_input)
 input_cont <- makeContrasts(treat-control, levels = design_input)
 QLtest_input <- glmQLFTest(fit_input, contrast=input_cont)
 Results_input <- as.data.frame(topTags(QLtest_input, n = dim(DGE_input)[1]))
+Results_input <- Results_input[complete.cases(Results_input$ensembl_gene_id),]
 
-# Volcano plot 
+# Identify differentially expressed genes
 Results_input$diffexpressed <- "NO"
 Results_input$diffexpressed[Results_input$logFC > 0.5849625 & Results_input$FDR < 0.15] <- "UP"
 Results_input$diffexpressed[Results_input$logFC < -0.5849625 & Results_input$FDR < 0.15] <- "DOWN"
+
+# Get a top 10 most up/downregulated genes by log2FC
 Results_input <- Results_input %>% 
   group_by(diffexpressed) %>%
   arrange(ifelse(diffexpressed == "DOWN", logFC, -logFC))%>%
@@ -138,6 +142,7 @@ Results_input <- Results_input %>%
   mutate(Top = ifelse(diffexpressed == "NO", "", Top)) # With this code it will erase the top names or symbols created in NO category
 row.names(Results_input) <- Results_input$ID
 
+# Volcano plot by using ggplot
 plot <- ggplot(data = Results_input, aes(x = logFC, y = -log10(PValue), col = diffexpressed, label =Top)) +
   geom_point() +
   theme_test() +
@@ -160,7 +165,49 @@ png("Volcano_input.png", units = "in", width=8, height=6, res=500)
 plot
 dev.off()
 
+# Volcano plot by using Enhancedvolcano
+# Define custom colors based on conditions ensuring length matches num_rows
+keyvals.colourIN <- ifelse(
+  Results_input$logFC < -0.5849625 & Results_input$PValue < 9.297768e-03, 'royalblue',
+  ifelse(Results_input$logFC > 0.5849625 & Results_input$PValue < 9.297768e-03, 'firebrick1',
+         'grey'))
+keyvals.colourIN[is.na(keyvals.colourIN)] <- "grey"
+names(keyvals.colourIN)[keyvals.colourIN == 'firebrick1'] <- 'UP'
+names(keyvals.colourIN)[keyvals.colourIN == 'grey'] <- 'NS'
+names(keyvals.colourIN)[keyvals.colourIN == 'royalblue'] <- 'DOWN'
 
+# Generate the EnhancedVolcano plot
+Volcano_Input <- EnhancedVolcano(Results_input,
+                lab = Results_input$Top,
+                x = 'logFC',
+                y = 'PValue',
+                xlim = c(-4, 4), # Limit of X axis
+                ylim = c(0, 7), # Limit of Y axis
+                xlab = bquote(~Log[2] ~ "FC"), # Edit x axis label
+                ylab = bquote(~-Log[10] ~ italic(Pvalue)), # Edit y axis label
+                title = 'Inputs',
+                subtitle = "Treatment vs Control",
+                pCutoff = 9.297768e-03,
+                FCcutoff = 0.5849625,
+                pointSize = 2.0,
+                labSize = 3,
+                labCol = 'black', # Color of the label
+                labFace = 'plain', # Plain, bold, italic
+                legendLabSize = 12, # Size of the legend's font 
+                legendIconSize = 4.0, 
+                drawConnectors = TRUE,
+                widthConnectors = 0.75,
+                colConnectors = 'black',
+                max.overlaps = 20,
+                boxedLabels = TRUE,
+                colCustom = keyvals.colourIN) # Apply custom colors
+png("Volcano_input.png", units = "in", width=8, height=8, res=500)
+Volcano_Input
+dev.off()
+
+## Other exploratory analysis for input counting data
+
+# Normalize the data
 CPM_input <- cpm(DGE_input,normalized.lib.sizes = TRUE, log = TRUE)
 
 MinVals <- apply(CPM_input, 1, min)
@@ -168,10 +215,12 @@ sum(MinVals == 0)
 Exp <- CPM_input[MinVals > 0, ]
 Exp_log2 <- as.matrix(Exp)
 
+# Get a bloxplot of normalized data
 png("boxplot_input.png", units = "in", width=8, height=6, res=500)
 boxplot(Exp_log2, ylab="log2 counts", main="Normalized Counts Input", las=1, cex.axis=0.8)
 dev.off()
 
+# Get a PCA plot of normalized data
 PCA <- prcomp(t(CPM_input))
 png("PCA_input.png", units = "in", width=7, height=6, res=500)
 autoplot(PCA,x=1, y=2, colour = "group", shape = "fraction",size=3,data = sample_table_input) + 
@@ -180,6 +229,7 @@ autoplot(PCA,x=1, y=2, colour = "group", shape = "fraction",size=3,data = sample
   guides(colour=guide_legend(title="Group"),shape=guide_legend(title="Time"))
 dev.off()
 
+# Make a correlation plot
 Cor_matrix <- cor(CPM_input)
 png("Cor_plot_input.png", units = "in", width=7, height=6, res=500)
 corrplot(Cor_matrix, method = 'color',is.corr = FALSE, col.lim = c(0.9, 1), col = COL1("Blues"))
@@ -206,10 +256,14 @@ fit_Mono <- glmQLFit(DGE_Mono, design_Mono)
 Mono_cont <- makeContrasts(treat-control, levels = design_Mono)
 QLtest_Mono <- glmQLFTest(fit_Mono, contrast=Mono_cont)
 Results_Mono <- as.data.frame(topTags(QLtest_Mono, n = dim(DGE_Mono)[1]))
+Results_Mono <- Results_Mono[complete.cases(Results_Mono$ensembl_gene_id),]
 
+# Identify differentially expressed genes
 Results_Mono$diffexpressed <- "NO"
 Results_Mono$diffexpressed[Results_Mono$logFC > 0.5849625 & Results_Mono$FDR < 0.15] <- "UP"
 Results_Mono$diffexpressed[Results_Mono$logFC < -0.5849625 & Results_Mono$FDR < 0.15] <- "DOWN"
+
+# Get a top 10 most up/downregulated genes by log2FC
 Results_Mono <- Results_Mono %>% 
   group_by(diffexpressed) %>%
   arrange(ifelse(diffexpressed == "DOWN", logFC, -logFC))%>%
@@ -217,6 +271,7 @@ Results_Mono <- Results_Mono %>%
   mutate(Top = ifelse(diffexpressed == "NO", "", Top)) 
 row.names(Results_Mono) <- Results_Mono$ID
 
+# Volcano plot by using ggplot
 plot <- ggplot(data = Results_Mono, aes(x = logFC, y = -log10(PValue), col = diffexpressed, label =Top)) +
   geom_point() +
   theme_test() +
@@ -239,6 +294,49 @@ png("Volcano_Mono.png", units = "in", width=8, height=6, res=500)
 plot
 dev.off()
 
+# Volcano plot by using Enhancedvolcano
+# Define custom colors based on conditions ensuring length matches num_rows
+keyvals.colourMON <- ifelse(
+  Results_Mono$logFC < -0.5849625 & Results_Mono$PValue < 6.341708e-03, 'royalblue',
+  ifelse(Results_Mono$logFC > 0.5849625 & Results_Mono$PValue < 6.341708e-03, 'firebrick1',
+         'grey'))
+keyvals.colourMON[is.na(keyvals.colourMON)] <- "grey"
+names(keyvals.colourMON)[keyvals.colourMON == 'firebrick1'] <- 'UP'
+names(keyvals.colourMON)[keyvals.colourMON == 'grey'] <- 'NS'
+names(keyvals.colourMON)[keyvals.colourMON == 'royalblue'] <- 'DOWN'
+
+# Generate the EnhancedVolcano plot
+Volcano_Mono <- EnhancedVolcano(Results_Mono,
+                                 lab = Results_Mono$Top,
+                                 x = 'logFC',
+                                 y = 'PValue',
+                                 xlim = c(-9, 8), # Limit of X axis > Log2FC
+                                 ylim = c(0, 7.5), # Limit of Y axis > PValue
+                                 xlab = bquote(~Log[2] ~ "FC"), # Edit x axis label
+                                 ylab = bquote(~-Log[10] ~ italic(Pvalue)), # Edit y axis label
+                                 title = 'Monosomes',
+                                 subtitle = "Treatment vs Control",
+                                 pCutoff = 6.341708e-03,
+                                 FCcutoff = 0.5849625,
+                                 pointSize = 2.0,
+                                 labSize = 3,
+                                 labCol = 'black', # Color of the label
+                                 labFace = 'plain', # Plain, bold, italic
+                                 legendLabSize = 12, # Size of the legend's font 
+                                 legendIconSize = 4.0, 
+                                 drawConnectors = TRUE,
+                                 widthConnectors = 0.75,
+                                 colConnectors = 'black',
+                                 max.overlaps = 20,
+                                 boxedLabels = TRUE,
+                                 colCustom = keyvals.colourMON) # Apply custom colors
+png("Volcano_Mono.png", units = "in", width=8, height=8, res=500)
+Volcano_Mono
+dev.off()
+
+## Other exploratory analysis for monosomes counting data
+
+# Normalize the data
 CPM_Mono <- cpm(DGE_Mono,normalized.lib.sizes = TRUE, log = TRUE)
 
 MinVals <- apply(CPM_Mono, 1, min)
@@ -246,10 +344,12 @@ sum(MinVals == 0)
 Exp <- CPM_Mono[MinVals > 0, ]
 Exp_log2 <- as.matrix(Exp)
 
+# Get a bloxplot of normalized data
 png("boxplot_Mono.png", units = "in", width=8, height=6, res=500)
 boxplot(Exp_log2, ylab="log2 counts", main="Normalized Counts Mono", las=1, cex.axis=0.8)
 dev.off()
 
+# Get a PCA plot of normalized data
 PCA <- prcomp(t(CPM_Mono))
 png("PCA_Mono.png", units = "in", width=7, height=6, res=500)
 autoplot(PCA,label = T,x=1, y=2, colour = "group", shape = "fraction",size=1,data = sample_table_Mono) + 
@@ -258,6 +358,7 @@ autoplot(PCA,label = T,x=1, y=2, colour = "group", shape = "fraction",size=1,dat
   guides(colour=guide_legend(title="Group"),shape=guide_legend(title="Time"))
 dev.off()
 
+# Make a correlation plot
 Cor_matrix <- cor(CPM_Mono)
 png("Cor_plot_Mono.png", units = "in", width=7, height=6, res=500)
 corrplot(Cor_matrix, method = 'color',is.corr = FALSE, col.lim = c(0.7, 1), col = COL1("Blues"))
@@ -285,12 +386,14 @@ fit_LP <- glmQLFit(DGE_LP, design_LP)
 LP_cont <- makeContrasts(treat-control, levels = design_LP)
 QLtest_LP <- glmQLFTest(fit_LP, contrast=LP_cont)
 Results_LP <- as.data.frame(topTags(QLtest_LP, n = dim(DGE_LP)[1]))
+Results_LP <- Results_LP[complete.cases(Results_LP$ensembl_gene_id),]
 
-# Volcano plot
-
+# Identify differentially expressed genes
 Results_LP$diffexpressed <- "NO"
 Results_LP$diffexpressed[Results_LP$logFC > 0.5849625 & Results_LP$FDR < 0.15] <- "UP"
 Results_LP$diffexpressed[Results_LP$logFC < -0.5849625 & Results_LP$FDR < 0.15] <- "DOWN"
+
+# Get a top 10 most up/downregulated genes by log2FC
 Results_LP <- Results_LP %>% 
   group_by(diffexpressed) %>%
   arrange(ifelse(diffexpressed == "DOWN", logFC, -logFC))%>%
@@ -298,6 +401,7 @@ Results_LP <- Results_LP %>%
   mutate(Top = ifelse(diffexpressed == "NO", "", Top)) 
 row.names(Results_LP) <- Results_LP$ID
 
+# Volcano plot by using ggplot
 plot <- ggplot(data = Results_LP, aes(x = logFC, y = -log10(PValue), col = diffexpressed, label =Top)) +
   geom_point() +
   theme_test() +
@@ -320,6 +424,50 @@ png("Volcano_LP.png", units = "in", width=8, height=6, res=500)
 plot
 dev.off()
 
+# Volcano plot by using Enhancedvolcano
+# Define custom colors based on conditions ensuring length matches num_rows
+keyvals.colourLP <- ifelse(
+  Results_LP$logFC < -0.5849625 & Results_LP$PValue < 5.783225e-03, 'royalblue',
+  ifelse(Results_LP$logFC > 0.5849625 & Results_LP$PValue < 5.783225e-03, 'firebrick1',
+         'grey'))
+keyvals.colourLP[is.na(keyvals.colourLP)] <- "grey"
+names(keyvals.colourLP)[keyvals.colourLP == 'firebrick1'] <- 'UP'
+names(keyvals.colourLP)[keyvals.colourLP == 'grey'] <- 'NS'
+names(keyvals.colourLP)[keyvals.colourLP == 'royalblue'] <- 'DOWN'
+
+# Generate the EnhancedVolcano plot
+
+Volcano_LP <- EnhancedVolcano(Results_LP,
+                                lab = Results_LP$Top,
+                                x = 'logFC',
+                                y = 'PValue',
+                                xlim = c(-7, 8.5), # Limit of X axis > Log2FC
+                                ylim = c(0, 10.5), # Limit of Y axis > PValue
+                                xlab = bquote(~Log[2] ~ "FC"), # Edit x axis label
+                                ylab = bquote(~-Log[10] ~ italic(Pvalue)), # Edit y axis label
+                                title = 'Ligt polysomes',
+                                subtitle = "Treatment vs Control",
+                                pCutoff = 5.783225e-03,
+                                FCcutoff = 0.5849625,
+                                pointSize = 2.0,
+                                labSize = 3,
+                                labCol = 'black', # Color of the label
+                                labFace = 'plain', # Plain, bold, italic
+                                legendLabSize = 12, # Size of the legend's font 
+                                legendIconSize = 4.0, 
+                                drawConnectors = TRUE,
+                                widthConnectors = 0.5,
+                                colConnectors = 'black',
+                                max.overlaps = 20,
+                                boxedLabels = TRUE,
+                                colCustom = keyvals.colourLP) # Apply custom colors
+png("Volcano_LP.png", units = "in", width=8, height=8, res=500)
+Volcano_LP
+dev.off()
+
+## Other exploratory analysis for light polysomes counting data
+
+# Normalize the data
 CPM_LP <- cpm(DGE_LP,normalized.lib.sizes = TRUE, log = TRUE)
 
 MinVals <- apply(CPM_LP, 1, min)
@@ -327,10 +475,12 @@ sum(MinVals == 0)
 Exp <- CPM_LP[MinVals > 0, ]
 Exp_log2 <- as.matrix(Exp)
 
+# Get a bloxplot of normalized data
 png("boxplot_LP.png", units = "in", width=8, height=6, res=500)
 boxplot(Exp_log2, ylab="log2 counts", main="Normalized Counts LP", las=1, cex.axis=0.8)
 dev.off()
 
+# Get a PCA plot of normalized data
 PCA <- prcomp(t(CPM_LP))
 png("PCA_LP.png", units = "in", width=7, height=6, res=500)
 autoplot(PCA,x=1, y=2, colour = "group", shape = "fraction",size=3,data = sample_table_LP) + 
@@ -339,6 +489,7 @@ autoplot(PCA,x=1, y=2, colour = "group", shape = "fraction",size=3,data = sample
   guides(colour=guide_legend(title="Group"),shape=guide_legend(title="Time"))
 dev.off()
 
+# Make a correlation plot
 Cor_matrix <- cor(CPM_LP)
 png("Cor_plot_LP.png", units = "in", width=7, height=6, res=500)
 corrplot(Cor_matrix, method = 'color',is.corr = FALSE, col.lim = c(0.8, 1), col = COL1("Blues"))
@@ -366,11 +517,14 @@ fit_HP <- glmQLFit(DGE_HP, design_HP)
 HP_cont <- makeContrasts(treat-control, levels = design_HP)
 QLtest_HP <- glmQLFTest(fit_HP, contrast=HP_cont)
 Results_HP <- as.data.frame(topTags(QLtest_HP, n = dim(DGE_HP)[1]))
+Results_HP <- Results_HP[complete.cases(Results_HP$ensembl_gene_id),]
 
-# Volcano plot
+# Identify differentially expressed genes
 Results_HP$diffexpressed <- "NO"
 Results_HP$diffexpressed[Results_HP$logFC > 0.5849625 & Results_HP$FDR < 0.15] <- "UP"
 Results_HP$diffexpressed[Results_HP$logFC < -0.5849625 & Results_HP$FDR < 0.15] <- "DOWN"
+
+# Get a top 10 most up/downregulated genes by log2FC
 Results_HP <- Results_HP %>% 
   group_by(diffexpressed) %>%
   arrange(ifelse(diffexpressed == "DOWN", logFC, -logFC))%>%
@@ -378,6 +532,7 @@ Results_HP <- Results_HP %>%
   mutate(Top = ifelse(diffexpressed == "NO", "", Top)) 
 row.names(Results_HP) <- Results_HP$ID
 
+# Volcano plot by using ggplot
 plot <- ggplot(data = Results_HP, aes(x = logFC, y = -log10(PValue), col = diffexpressed, label =Top)) +
   geom_point() +
   theme_test() +
@@ -400,6 +555,50 @@ png("Volcano_HP.png", units = "in", width=8, height=6, res=500)
 plot
 dev.off()
 
+# Volcano plot by using Enhancedvolcano
+# Define custom colors based on conditions ensuring length matches num_rows
+keyvals.colourHP <- ifelse(
+  Results_HP$logFC < -0.5849625 & Results_HP$PValue < 7.937895e-03, 'royalblue',
+  ifelse(Results_HP$logFC > 0.5849625 & Results_HP$PValue < 7.937895e-03, 'firebrick1',
+         'grey'))
+keyvals.colourHP[is.na(keyvals.colourHP)] <- "grey"
+names(keyvals.colourHP)[keyvals.colourHP == 'firebrick1'] <- 'UP'
+names(keyvals.colourHP)[keyvals.colourHP == 'grey'] <- 'NS'
+names(keyvals.colourHP)[keyvals.colourHP == 'royalblue'] <- 'DOWN'
+
+# Generate the EnhancedVolcano plot
+
+Volcano_HP <- EnhancedVolcano(Results_HP,
+                              lab = Results_HP$Top,
+                              x = 'logFC',
+                              y = 'PValue',
+                              xlim = c(-5, 9.5), # Limit of X axis > Log2FC
+                              ylim = c(0, 10.5), # Limit of Y axis > PValue
+                              xlab = bquote(~Log[2] ~ "FC"), # Edit x axis label
+                              ylab = bquote(~-Log[10] ~ italic(Pvalue)), # Edit y axis label
+                              title = 'Heavy polysomes',
+                              subtitle = "Treatment vs Control",
+                              pCutoff = 7.937895e-03,
+                              FCcutoff = 0.5849625,
+                              pointSize = 2.0,
+                              labSize = 3,
+                              labCol = 'black', # Color of the label
+                              labFace = 'plain', # Plain, bold, italic
+                              legendLabSize = 12, # Size of the legend's font 
+                              legendIconSize = 4.0, 
+                              drawConnectors = TRUE,
+                              widthConnectors = 0.5,
+                              colConnectors = 'black',
+                              max.overlaps = 20,
+                              boxedLabels = TRUE,
+                              colCustom = keyvals.colourHP) # Apply custom colors
+png("Volcano_HP.png", units = "in", width=8, height=8, res=500)
+Volcano_HP
+dev.off()
+
+## Other exploratory analysis for light polysomes counting data
+
+# Normalize the data
 CPM_HP <- cpm(DGE_HP,normalized.lib.sizes = T, log = TRUE)
 
 MinVals <- apply(CPM_HP, 1, min)
@@ -407,10 +606,12 @@ sum(MinVals == 0)
 Exp <- CPM_HP[MinVals > 0, ]
 Exp_log2 <- as.matrix(Exp)
 
+# Get a bloxplot of normalized data
 png("boxplot_HP.png", units = "in", width=8, height=6, res=500)
 boxplot(Exp_log2, ylab="log2 counts", main="Normalized Counts HP", las=1, cex.axis=0.8)
 dev.off()
 
+# Get a PCA plot of normalized data
 PCA <- prcomp(t(CPM_HP))
 png("PCA_HP.png", units = "in", width=7, height=6, res=500)
 autoplot(PCA,x=1, y=2, colour = "group", shape = "fraction",size=3,data = sample_table_HP) + 
@@ -419,6 +620,7 @@ autoplot(PCA,x=1, y=2, colour = "group", shape = "fraction",size=3,data = sample
   guides(colour=guide_legend(title="Group"),shape=guide_legend(title="Time"))
 dev.off()
 
+# Make a correlation plot
 Cor_matrix <- cor(CPM_HP)
 png("Cor_plot_HP.png", units = "in", width=7, height=6, res=500)
 corrplot(Cor_matrix, method = 'color',is.corr = FALSE, col.lim = c(0.8, 1), col = COL1("Blues"))
